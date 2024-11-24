@@ -1,0 +1,70 @@
+Project Scope Overview:
+    • Product and Inventory Management:
+    • Product Information: The system maintains details on each product, including product ID, name, description, and price. Products are categorized, and discounts can be applied based on discount codes.
+    • Inventory Tracking: Products are stocked in inventory, and the system keeps track of inventory levels across different warehouses and stores. Each inventory entry includes a unique inventory ID, quantity, and shipping date.
+    • Supplier and Supplier Orders: The system allows for managing supplier information, including supplier name, contact info, and address. Supplier orders are recorded with expected delivery dates and statuses.
+    • Customer Order and Returns Management:
+    • Customer Orders: The system manages customer orders with information on order status and shipping details. Each order can contain multiple order items, including quantity and unit price.
+    • Payments: Payment details are recorded for each order, covering the amount, payment date, and method.
+    • Returns Management: Customers can return items, and the system tracks return status, reason, and date.
+    • Employee and Role Management:
+    • Employee Information: Employee details, such as name, date of birth, email, and hire date, are maintained. Employees can be assigned to specific roles and locations (store or warehouse).
+    • Roles and Supervision: The system distinguishes between employees working in stores and warehouses, with hierarchical relationships (supervision) captured. Supervisors oversee other employees, with timeframes recorded for each supervisory relationship.
+    • Store and Warehouse Management:
+    • Store Locations: Information on stores, including type and location, is recorded. Products can be stocked at different stores for availability.
+    • Warehouse Management: Warehouses are maintained with capacity details and warehouse location, supporting inventory storage and employee assignments.
+    • Customer Engagement:
+    • Reviews: Customers can write reviews on products, with each review associated with a date, rating, and text description. This enhances customer engagement and feedback.
+
+
+
+Relation Schema: {red text=FK}
+
+Product(product_id , name, description, price, stock_level, category_id, discount_id, supplier_id)
+
+*Customer(customer_id , name, phone_no, email, shipping_address)
+
+*Category(category_id , category_name)
+
+Discount(discount_id, discount_percentage, start_date, end_date)
+
+Supplier(supplier_id, supplier_name, contact_info, address)
+
+SupplierOrder(sup_order_id ,supplier_id , warehouse_id ,order_date, expected_del_date, status)
+
+Warehouse(warehouse_id , wh_location, capacity)
+
+Inventory(inventory_id , product_id , warehouse_id , store_id ,quantity, shipping_date)
+
+Store(store_id , store_type, store_location)
+
+Employee(emp_id , name, dob, email, hire_date, supervisor_id)
+
+Order(order_id, customer_id , order_date, order_status)
+
+OrderItem(orderitem_id, order_id , product_id , quantity, unit_price)
+
+Return(return_id, order_id , return_date, return_reason, return_status)
+
+Review(review_id, customer_id, product_id, review_date, rating, review_text)
+
+Shipment(shipment_id , order_id  , warehouse_id , shipping_date, shipping_status)
+
+Payment(payment_id, order_id , payment_ amount, payment_ date, payment_ status)
+
+Supervisor(supervisor_id, emp_id, from_date, to_date)
+
+Empemail( emp_id, email)
+
+CustomerEmail(customer_id,email)
+
+customerphoneno(customer_id, phone_no)
+
+
+
+  
+
+
+
+
+                           
