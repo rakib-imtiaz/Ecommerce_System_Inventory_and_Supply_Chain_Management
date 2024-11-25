@@ -3,8 +3,19 @@ require_once '../../config/database.php';
 require_once '../../classes/Inventory.php';
 require_once '../../includes/header.php';
 
+// Debug point 1: Check if file is loaded
+error_log("Debug: Inventory index.php loaded");
+
 $database = new Database();
 $db = $database->getConnection();
+
+// Debug point 2: Check database connection
+if ($db) {
+    error_log("Debug: Database connection successful");
+} else {
+    error_log("Error: Database connection failed");
+}
+
 $inventory = new Inventory($db);
 
 // Get parameters
@@ -15,12 +26,26 @@ $sort = isset($_GET['sort']) ? $_GET['sort'] : '';
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 $limit = 10;
 
+// Debug point 3: Log parameters
+error_log("Debug: Search: $search, Category: $category, Status: $stock_status, Sort: $sort, Page: $page");
+
 // Get categories for filter
 $query = "SELECT category_id, category_name FROM category ORDER BY category_name";
-$categories = $db->query($query)->fetchAll(PDO::FETCH_ASSOC);
+try {
+    $categories = $db->query($query)->fetchAll(PDO::FETCH_ASSOC);
+    error_log("Debug: Categories fetched: " . count($categories));
+} catch (PDOException $e) {
+    error_log("Error: Failed to fetch categories: " . $e->getMessage());
+}
 
-// Get inventory items
-$result = $inventory->getAllInventory($search, $category, $stock_status, $sort, $limit, $page);
+// Get inventory items with debug
+try {
+    $result = $inventory->getAllInventory($search, $category, $stock_status, $sort, $limit, $page);
+    error_log("Debug: Inventory query executed");
+    error_log("Debug: Number of items found: " . $result->rowCount());
+} catch (PDOException $e) {
+    error_log("Error: Failed to fetch inventory: " . $e->getMessage());
+}
 
 // Get low stock alerts
 $low_stock = $inventory->getLowStockProducts(5);
@@ -118,36 +143,68 @@ $low_stock = $inventory->getLowStockProducts(5);
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock Level</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reorder Level</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-gray-200">
-            <?php while ($row = $result->fetch(PDO::FETCH_ASSOC)) { ?>
+            <?php 
+            if ($result && $result->rowCount() > 0) {
+                while ($row = $result->fetch(PDO::FETCH_ASSOC)) { 
+            ?>
                 <tr>
                     <td class="px-6 py-4">
-                        <div class="text-sm font-medium text-gray-900"><?php echo htmlspecialchars($row['name']); ?></div>
-                        <div class="text-sm text-gray-500">SKU: <?php echo htmlspecialchars($row['sku']); ?></div>
+                        <div class="text-sm font-medium text-gray-900">
+                            <?php echo htmlspecialchars($row['name']); ?>
+                        </div>
+                        <?php if (!empty($row['sku'])): ?>
+                            <div class="text-sm text-gray-500">
+                                SKU: <?php echo htmlspecialchars($row['sku']); ?>
+                            </div>
+                        <?php endif; ?>
                     </td>
-                    <td class="px-6 py-4"><?php echo htmlspecialchars($row['category_name']); ?></td>
+                    <td class="px-6 py-4 text-sm text-gray-500">
+                        <?php echo htmlspecialchars($row['category_name'] ?? 'Uncategorized'); ?>
+                    </td>
                     <td class="px-6 py-4">
                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                            <?php echo $row['stock_level'] > $row['reorder_level'] ? 'bg-green-100 text-green-800' : 
-                                    ($row['stock_level'] > 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'); ?>">
-                            <?php echo $row['stock_level']; ?> units
+                            <?php 
+                            $stock_level = (int)$row['stock_level'];
+                            $reorder_level = (int)($row['reorder_level'] ?? 10);
+                            
+                            if ($stock_level === 0) {
+                                echo 'bg-red-100 text-red-800';
+                            } elseif ($stock_level <= $reorder_level) {
+                                echo 'bg-yellow-100 text-yellow-800';
+                            } else {
+                                echo 'bg-green-100 text-green-800';
+                            }
+                            ?>">
+                            <?php echo $stock_level; ?> units
                         </span>
                     </td>
-                    <td class="px-6 py-4"><?php echo $row['reorder_level']; ?> units</td>
-                    <td class="px-6 py-4"><?php echo htmlspecialchars($row['supplier_name']); ?></td>
+                    <td class="px-6 py-4 text-sm text-gray-500">
+                        <?php echo htmlspecialchars($row['supplier_name'] ?? 'No Supplier'); ?>
+                    </td>
                     <td class="px-6 py-4 text-sm font-medium">
-                        <a href="<?php echo BASE_URL; ?>/modules/inventory/update.php?id=<?php echo $row['product_id']; ?>" 
-                           class="text-blue-500 hover:text-blue-700 mr-3">Update Stock</a>
-                        <a href="#" onclick="viewHistory(<?php echo $row['product_id']; ?>)" 
-                           class="text-gray-500 hover:text-gray-700">History</a>
+                        <a href="update.php?id=<?php echo $row['product_id']; ?>" 
+                           class="text-blue-600 hover:text-blue-900 mr-3">Update Stock</a>
+                        <a href="#" onclick="viewHistory(<?php echo $row['product_id']; ?>)"
+                           class="text-gray-600 hover:text-gray-900">History</a>
                     </td>
                 </tr>
-            <?php } ?>
+            <?php 
+                }
+            } else {
+            ?>
+                <tr>
+                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                        No inventory items found
+                    </td>
+                </tr>
+            <?php 
+            }
+            ?>
         </tbody>
     </table>
 </div>

@@ -23,10 +23,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Process order items
         foreach ($_POST['items'] as $item) {
             if (!empty($item['product_id']) && !empty($item['quantity'])) {
+                // Validate unit price is not empty and is numeric
+                if (empty($item['price']) || !is_numeric($item['price'])) {
+                    throw new Exception("Invalid price for one or more items");
+                }
+                
                 $items[] = [
-                    'product_id' => $item['product_id'],
-                    'quantity' => $item['quantity'],
-                    'unit_price' => $item['price']
+                    'product_id' => (int)$item['product_id'],
+                    'quantity' => (int)$item['quantity'],
+                    'unit_price' => (float)$item['price']
                 ];
             }
         }
@@ -91,42 +96,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </div>
 
 <template id="orderItemTemplate">
-    <div class="order-item bg-gray-50 p-4 rounded mb-2">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Product</label>
-                <select name="items[{index}][product_id]" onchange="updatePrice(this)" required
-                        class="w-full px-3 py-2 border border-gray-300 rounded-md">
-                    <option value="">Select Product</option>
-                    <?php foreach ($products as $product): ?>
-                        <option value="<?php echo $product['product_id']; ?>" 
-                                data-price="<?php echo $product['price']; ?>"
-                                data-stock="<?php echo $product['stock_level']; ?>">
-                            <?php echo htmlspecialchars($product['name']); ?> 
-                            (Stock: <?php echo $product['stock_level']; ?>)
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
-                <input type="number" name="items[{index}][quantity]" min="1" required
-                       class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                       onchange="updateSubtotal(this)">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Price</label>
-                <input type="number" name="items[{index}][price]" step="0.01" readonly
-                       class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Subtotal</label>
-                <input type="text" readonly
-                       class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100">
-            </div>
+    <div class="order-item grid grid-cols-4 gap-4 mb-4">
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Product</label>
+            <select name="items[{index}][product_id]" onchange="updatePrice(this)" required
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500">
+                <option value="">Select Product</option>
+                <?php foreach ($products as $product): ?>
+                    <option value="<?php echo $product['product_id']; ?>" 
+                            data-price="<?php echo $product['price']; ?>"
+                            data-stock="<?php echo $product['stock_level']; ?>">
+                        <?php echo htmlspecialchars($product['name']); ?> (Stock: <?php echo $product['stock_level']; ?>)
+                    </option>
+                <?php endforeach; ?>
+            </select>
         </div>
-        <button type="button" onclick="removeOrderItem(this)" 
-                class="mt-2 text-red-500 hover:text-red-700">Remove</button>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
+            <input type="number" name="items[{index}][quantity]" min="1" required
+                   onchange="updateSubtotal(this)"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500">
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Unit Price</label>
+            <input type="number" name="items[{index}][price]" step="0.01" readonly required
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50">
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Subtotal</label>
+            <input type="text" readonly
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50">
+        </div>
     </div>
 </template>
 
@@ -149,30 +149,79 @@ function addOrderItem() {
 
 function removeOrderItem(button) {
     button.closest('.order-item').remove();
+    updateTotalAmount();
 }
 
 function updatePrice(select) {
     const option = select.options[select.selectedIndex];
-    const priceInput = select.closest('.order-item').querySelector('[name$="[price]"]');
-    const quantityInput = select.closest('.order-item').querySelector('[name$="[quantity]"]');
+    const orderItem = select.closest('.order-item');
+    const priceInput = orderItem.querySelector('[name$="[price]"]');
+    const quantityInput = orderItem.querySelector('[name$="[quantity]"]');
     
     if (option.value) {
-        priceInput.value = option.dataset.price;
+        const price = parseFloat(option.dataset.price);
+        priceInput.value = price.toFixed(2);
         quantityInput.max = option.dataset.stock;
+        quantityInput.value = 1; // Set default quantity
+        updateSubtotal(quantityInput);
+    } else {
+        priceInput.value = '';
+        quantityInput.value = '';
+        quantityInput.max = '';
         updateSubtotal(quantityInput);
     }
 }
 
 function updateSubtotal(input) {
     const orderItem = input.closest('.order-item');
-    const price = orderItem.querySelector('[name$="[price]"]').value;
-    const quantity = input.value;
+    const priceInput = orderItem.querySelector('[name$="[price]"]');
+    const quantityInput = orderItem.querySelector('[name$="[quantity]"]');
     const subtotalInput = orderItem.querySelector('input[readonly]:last-of-type');
     
-    if (price && quantity) {
-        subtotalInput.value = '$' + (price * quantity).toFixed(2);
+    const price = parseFloat(priceInput.value) || 0;
+    const quantity = parseInt(quantityInput.value) || 0;
+    
+    const subtotal = price * quantity;
+    subtotalInput.value = '$' + subtotal.toFixed(2);
+    
+    updateTotalAmount();
+}
+
+function updateTotalAmount() {
+    const subtotalInputs = document.querySelectorAll('.order-item input[readonly]:last-of-type');
+    let total = 0;
+    
+    subtotalInputs.forEach(input => {
+        const value = parseFloat(input.value.replace('$', '')) || 0;
+        total += value;
+    });
+    
+    const totalElement = document.getElementById('totalAmount');
+    if (totalElement) {
+        totalElement.textContent = '$' + total.toFixed(2);
     }
 }
+
+// Validate form before submission
+document.getElementById('orderForm').addEventListener('submit', function(e) {
+    const items = document.querySelectorAll('.order-item');
+    let valid = false;
+    
+    items.forEach(item => {
+        const productSelect = item.querySelector('[name$="[product_id]"]');
+        const quantity = item.querySelector('[name$="[quantity]"]');
+        const price = item.querySelector('[name$="[price]"]');
+        
+        if (productSelect.value && quantity.value && price.value) {
+            valid = true;
+        }
+    });
+    
+    if (!valid) {
+        e.preventDefault();
+        alert('Please add at least one valid item to the order');
+    }
+});
 
 // Add first item row by default
 addOrderItem();

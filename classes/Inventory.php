@@ -9,63 +9,86 @@ class Inventory {
     }
 
     public function getAllInventory($search = '', $category = '', $stock_status = '', $sort = '', $limit = 10, $page = 1) {
-        $query = "SELECT p.*, c.category_name, s.supplier_name,
-                 (SELECT COUNT(*) FROM " . $this->history_table . " WHERE product_id = p.product_id) as movement_count
-                 FROM " . $this->table_name . " p
-                 LEFT JOIN category c ON p.category_id = c.category_id
-                 LEFT JOIN supplier s ON p.supplier_id = s.supplier_id
-                 WHERE 1=1";
-        
-        $params = [];
+        try {
+            // Debug: Base query
+            $query = "SELECT p.*, c.category_name, s.supplier_name
+                     FROM product p
+                     LEFT JOIN category c ON p.category_id = c.category_id
+                     LEFT JOIN supplier s ON p.supplier_id = s.supplier_id
+                     WHERE 1=1";
+            
+            $params = [];
+            error_log("Debug: Building inventory query");
 
-        if (!empty($search)) {
-            $query .= " AND (p.name LIKE ? OR p.sku LIKE ?)";
-            $searchTerm = "%{$search}%";
-            $params[] = $searchTerm;
-            $params[] = $searchTerm;
-        }
-
-        if (!empty($category)) {
-            $query .= " AND p.category_id = ?";
-            $params[] = $category;
-        }
-
-        if (!empty($stock_status)) {
-            switch ($stock_status) {
-                case 'low':
-                    $query .= " AND p.stock_level <= p.reorder_level";
-                    break;
-                case 'out':
-                    $query .= " AND p.stock_level = 0";
-                    break;
-                case 'in':
-                    $query .= " AND p.stock_level > p.reorder_level";
-                    break;
+            if (!empty($search)) {
+                $query .= " AND (p.name LIKE ? OR p.sku LIKE ?)";
+                $searchTerm = "%{$search}%";
+                $params[] = $searchTerm;
+                $params[] = $searchTerm;
+                error_log("Debug: Added search condition: $searchTerm");
             }
+
+            if (!empty($category)) {
+                $query .= " AND p.category_id = ?";
+                $params[] = $category;
+                error_log("Debug: Added category condition: $category");
+            }
+
+            if (!empty($stock_status)) {
+                switch ($stock_status) {
+                    case 'low':
+                        $query .= " AND p.stock_level <= COALESCE(p.reorder_level, 10)";
+                        break;
+                    case 'out':
+                        $query .= " AND p.stock_level = 0";
+                        break;
+                    case 'in':
+                        $query .= " AND p.stock_level > COALESCE(p.reorder_level, 10)";
+                        break;
+                }
+                error_log("Debug: Added stock status condition: $stock_status");
+            }
+
+            switch ($sort) {
+                case 'stock_asc':
+                    $query .= " ORDER BY p.stock_level ASC";
+                    break;
+                case 'stock_desc':
+                    $query .= " ORDER BY p.stock_level DESC";
+                    break;
+                case 'name_asc':
+                    $query .= " ORDER BY p.name ASC";
+                    break;
+                default:
+                    $query .= " ORDER BY p.product_id DESC";
+            }
+            error_log("Debug: Added sort condition: $sort");
+
+            $offset = ($page - 1) * $limit;
+            $query .= " LIMIT ? OFFSET ?";
+            $params[] = (int)$limit;
+            $params[] = (int)$offset;
+
+            // Debug: Final query and parameters
+            error_log("Debug: Final SQL Query: " . $query);
+            error_log("Debug: Parameters: " . print_r($params, true));
+
+            $stmt = $this->conn->prepare($query);
+            
+            if ($stmt === false) {
+                error_log("Error: Failed to prepare statement");
+                return false;
+            }
+
+            $stmt->execute($params);
+            error_log("Debug: Query executed successfully. Row count: " . $stmt->rowCount());
+            
+            return $stmt;
+        } catch (PDOException $e) {
+            error_log("Error in getAllInventory: " . $e->getMessage());
+            error_log("SQL State: " . $e->getCode());
+            throw $e;
         }
-
-        switch ($sort) {
-            case 'stock_asc':
-                $query .= " ORDER BY p.stock_level ASC";
-                break;
-            case 'stock_desc':
-                $query .= " ORDER BY p.stock_level DESC";
-                break;
-            case 'name_asc':
-                $query .= " ORDER BY p.name ASC";
-                break;
-            default:
-                $query .= " ORDER BY p.product_id DESC";
-        }
-
-        $offset = ($page - 1) * $limit;
-        $query .= " LIMIT ?, ?";
-        $params[] = (int)$offset;
-        $params[] = (int)$limit;
-
-        $stmt = $this->conn->prepare($query);
-        $stmt->execute($params);
-        return $stmt;
     }
 
     public function updateStock($product_id, $quantity_change, $type, $notes = '') {
@@ -117,15 +140,25 @@ class Inventory {
     }
 
     public function getLowStockProducts($limit = 10) {
-        $query = "SELECT p.*, c.category_name
-                 FROM " . $this->table_name . " p
-                 LEFT JOIN category c ON p.category_id = c.category_id
-                 WHERE p.stock_level <= p.reorder_level
-                 ORDER BY (p.stock_level / p.reorder_level) ASC
-                 LIMIT ?";
+        try {
+            $query = "SELECT p.*, c.category_name
+                     FROM product p
+                     LEFT JOIN category c ON p.category_id = c.category_id
+                     WHERE p.stock_level <= COALESCE(p.reorder_level, 10)
+                     ORDER BY (p.stock_level / NULLIF(p.reorder_level, 0)) ASC
+                     LIMIT ?";
 
-        $stmt = $this->conn->prepare($query);
-        $stmt->execute([$limit]);
-        return $stmt;
+            error_log("Debug: Low stock query: " . $query);
+            
+            $stmt = $this->conn->prepare($query);
+            $stmt->execute([$limit]);
+            
+            error_log("Debug: Low stock products found: " . $stmt->rowCount());
+            
+            return $stmt;
+        } catch (PDOException $e) {
+            error_log("Error in getLowStockProducts: " . $e->getMessage());
+            throw $e;
+        }
     }
 } 
