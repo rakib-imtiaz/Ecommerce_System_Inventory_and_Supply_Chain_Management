@@ -1,3 +1,5 @@
+<?php require_once __DIR__ . '/auth_check.php'; ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -25,16 +27,6 @@
         
         .nav-link:hover::after {
             width: 100%;
-        }
-
-        .dropdown-content {
-            transform-origin: top;
-            transform: scaleY(0);
-            transition: transform 0.2s ease-in-out;
-        }
-
-        .dropdown:hover .dropdown-content {
-            transform: scaleY(1);
         }
 
         @keyframes fadeIn {
@@ -98,29 +90,11 @@
                 </div>
                 
                 <div class="flex items-center space-x-4">
-                    <button class="bg-emerald-100 text-emerald-600 px-4 py-2 rounded-lg hover:bg-emerald-200 transition-colors duration-200">
-                        <i class="fas fa-bell mr-2"></i>
-                        <span class="hidden md:inline">Notifications</span>
-                    </button>
-                    <div class="relative dropdown">
-                        <button class="flex items-center space-x-2 text-gray-700 hover:text-emerald-600 transition-colors duration-200">
-                            <img src="https://ui-avatars.com/api/?name=Admin&background=10B981&color=fff" 
-                                 class="w-8 h-8 rounded-full">
-                            <span class="hidden md:inline">Admin</span>
-                        </button>
-                        <div class="dropdown-content absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2">
-                            <a href="#" class="block px-4 py-2 text-gray-700 hover:bg-emerald-50 hover:text-emerald-600">
-                                <i class="fas fa-user mr-2"></i> Profile
-                            </a>
-                            <a href="#" class="block px-4 py-2 text-gray-700 hover:bg-emerald-50 hover:text-emerald-600">
-                                <i class="fas fa-cog mr-2"></i> Settings
-                            </a>
-                            <hr class="my-2">
-                            <a href="#" class="block px-4 py-2 text-red-600 hover:bg-red-50">
-                                <i class="fas fa-sign-out-alt mr-2"></i> Logout
-                            </a>
-                        </div>
-                    </div>
+                    <a href="<?php echo BASE_URL; ?>/logout.php" 
+                       class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors duration-200">
+                        <i class="fas fa-sign-out-alt mr-2"></i>
+                        <span class="hidden md:inline">Logout</span>
+                    </a>
                 </div>
             </div>
         </div>

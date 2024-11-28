@@ -16,7 +16,6 @@ INSERT INTO `category` (`category_name`) VALUES
 ('Clothing'),
 ('Books'),
 ('Toys');
-
 -- ------------------------------
 -- Table: customer
 -- ------------------------------
@@ -75,9 +74,10 @@ INSERT INTO `customerphoneno` (`customer_id`, `phone_number`) VALUES
 -- ------------------------------
 CREATE TABLE `discount` (
   `discount_code` VARCHAR(50) NOT NULL PRIMARY KEY,
-  `discount_percentage` DECIMAL(5,2) NOT NULL CHECK (`discount_percentage` >= 0 AND `discount_percentage` <= 100),
+  `discount_percentage` DECIMAL(5,2) NOT NULL,
   `start_date` DATE NOT NULL,
-  `end_date` DATE NOT NULL CHECK (`end_date` >= `start_date`)
+  `end_date` DATE NOT NULL,
+  CONSTRAINT `valid_percentage` CHECK (`discount_percentage` >= 0 AND `discount_percentage` <= 100)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Insert data into discount
@@ -340,10 +340,10 @@ CREATE TABLE `shipment` (
 -- Insert data into shipment
 INSERT INTO `shipment` (`order_id`, `warehouse_id`, `shipping_date`, `shipping_status`) VALUES
 (1, 1, '2024-11-02', 'Delivered'),
-(2, 2, 2, '2024-11-06', 'In Transit'),
-(3, 3, 3, '2024-11-11', 'Shipped'),
-(4, 4, 4, '2024-11-16', 'Cancelled'),
-(5, 5, 5, '2024-11-19', 'Pending');
+(2, 2, '2024-11-06', 'In Transit'),
+(3, 3, '2024-11-11', 'Shipped'),
+(4, 4, '2024-11-16', 'Cancelled'),
+(5, 5, '2024-11-19', 'Pending');
 
 -- ------------------------------
 -- Table: supervisor
@@ -373,7 +373,7 @@ CREATE TABLE `supplierorder` (
   `supplier_id` INT NOT NULL,
   `warehouse_id` INT NOT NULL,
   `order_date` DATE NOT NULL,
-  `expected_del_date` DATE CHECK (`expected_del_date` >= `order_date`),
+  `expected_del_date` DATE,
   `status` ENUM('Pending', 'In Transit', 'Delivered', 'Completed', 'Cancelled') DEFAULT 'Pending',
   FOREIGN KEY (`supplier_id`) REFERENCES `supplier` (`supplier_id`) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (`warehouse_id`) REFERENCES `warehouse` (`warehouse_id`) ON DELETE CASCADE ON UPDATE CASCADE
@@ -386,3 +386,20 @@ INSERT INTO `supplierorder` (`supplier_id`, `warehouse_id`, `order_date`, `expec
 (3, 3, '2024-10-10', '2024-10-25', 'In Transit'),
 (4, 4, '2024-10-15', '2024-11-01', 'Cancelled'),
 (5, 5, '2024-10-20', '2024-11-05', 'Completed');
+
+-- ------------------------------
+-- Table: users
+-- ------------------------------
+CREATE TABLE `users` (
+  `user_id` INT AUTO_INCREMENT PRIMARY KEY,
+  `username` VARCHAR(50) NOT NULL UNIQUE,
+  `password` VARCHAR(50) NOT NULL,
+  `role` ENUM('admin', 'user') DEFAULT 'user',
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Insert demo users (plain text passwords for demo)
+INSERT INTO `users` (`username`, `password`, `role`) VALUES
+('admin', 'admin123', 'admin'),
+('demo', 'demo123', 'user');
+

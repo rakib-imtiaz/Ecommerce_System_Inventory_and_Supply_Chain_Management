@@ -9,11 +9,12 @@ error_log("Debug: Inventory index.php loaded");
 $database = new Database();
 $db = $database->getConnection();
 
-// Debug point 2: Check database connection
+// Enhanced error logging for database connection
 if ($db) {
     error_log("Debug: Database connection successful");
 } else {
     error_log("Error: Database connection failed");
+    die("Failed to connect to database");
 }
 
 $inventory = new Inventory($db);
@@ -41,10 +42,13 @@ try {
 // Get inventory items with debug
 try {
     $result = $inventory->getAllInventory($search, $category, $stock_status, $sort, $limit, $page);
-    error_log("Debug: Inventory query executed");
-    error_log("Debug: Number of items found: " . $result->rowCount());
+    error_log("Debug: Inventory query executed successfully");
+    error_log("Debug: Number of items found: " . ($result ? $result->rowCount() : 0));
 } catch (PDOException $e) {
-    error_log("Error: Failed to fetch inventory: " . $e->getMessage());
+    error_log("Error in getAllInventory: " . $e->getMessage());
+    error_log("SQL State: " . $e->errorInfo[0]);
+    error_log("Error Code: " . $e->errorInfo[1]);
+    error_log("Error Message: " . $e->errorInfo[2]);
 }
 
 // Get low stock alerts
@@ -53,8 +57,10 @@ $low_stock = $inventory->getLowStockProducts(5);
 
 <div class="mb-6 flex justify-between items-center">
     <h1 class="text-3xl font-semibold">Inventory Management</h1>
-    <a href="<?php echo BASE_URL; ?>/modules/inventory/update.php" 
-       class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Stock Update</a>
+    <a href="<?php echo BASE_URL; ?>/modules/inventory/add.php" 
+       class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+        Add Product
+    </a>
 </div>
 
 <!-- Low Stock Alerts -->

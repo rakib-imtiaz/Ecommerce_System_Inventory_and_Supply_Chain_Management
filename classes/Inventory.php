@@ -2,7 +2,6 @@
 class Inventory {
     private $conn;
     private $table_name = "product";
-    private $history_table = "inventory_history";
 
     public function __construct($db) {
         $this->conn = $db;
@@ -10,45 +9,38 @@ class Inventory {
 
     public function getAllInventory($search = '', $category = '', $stock_status = '', $sort = '', $limit = 10, $page = 1) {
         try {
-            // Debug: Base query
-            $query = "SELECT p.*, c.category_name, s.supplier_name
-                     FROM product p
-                     LEFT JOIN category c ON p.category_id = c.category_id
-                     LEFT JOIN supplier s ON p.supplier_id = s.supplier_id
+            $query = "SELECT p.*, c.category_name, s.supplier_name 
+                     FROM " . $this->table_name . " p 
+                     LEFT JOIN category c ON p.category_id = c.category_id 
+                     LEFT JOIN supplier s ON p.supplier_id = s.supplier_id 
                      WHERE 1=1";
-            
-            $params = [];
-            error_log("Debug: Building inventory query");
 
+            // Add search condition
             if (!empty($search)) {
-                $query .= " AND (p.name LIKE ? OR p.sku LIKE ?)";
-                $searchTerm = "%{$search}%";
-                $params[] = $searchTerm;
-                $params[] = $searchTerm;
-                error_log("Debug: Added search condition: $searchTerm");
+                $query .= " AND (p.name LIKE :search OR p.description LIKE :search)";
             }
 
+            // Add category filter
             if (!empty($category)) {
-                $query .= " AND p.category_id = ?";
-                $params[] = $category;
-                error_log("Debug: Added category condition: $category");
+                $query .= " AND p.category_id = :category";
             }
 
+            // Add stock status filter
             if (!empty($stock_status)) {
                 switch ($stock_status) {
-                    case 'low':
-                        $query .= " AND p.stock_level <= COALESCE(p.reorder_level, 10)";
-                        break;
                     case 'out':
                         $query .= " AND p.stock_level = 0";
                         break;
+                    case 'low':
+                        $query .= " AND p.stock_level > 0 AND p.stock_level <= 10";
+                        break;
                     case 'in':
-                        $query .= " AND p.stock_level > COALESCE(p.reorder_level, 10)";
+                        $query .= " AND p.stock_level > 10";
                         break;
                 }
-                error_log("Debug: Added stock status condition: $stock_status");
             }
 
+            // Add sorting
             switch ($sort) {
                 case 'stock_asc':
                     $query .= " ORDER BY p.stock_level ASC";
@@ -62,102 +54,106 @@ class Inventory {
                 default:
                     $query .= " ORDER BY p.product_id DESC";
             }
-            error_log("Debug: Added sort condition: $sort");
 
+            // Add pagination
             $offset = ($page - 1) * $limit;
-            $query .= " LIMIT ? OFFSET ?";
-            $params[] = (int)$limit;
-            $params[] = (int)$offset;
-
-            // Debug: Final query and parameters
-            error_log("Debug: Final SQL Query: " . $query);
-            error_log("Debug: Parameters: " . print_r($params, true));
+            $query .= " LIMIT :limit OFFSET :offset";
 
             $stmt = $this->conn->prepare($query);
-            
-            if ($stmt === false) {
-                error_log("Error: Failed to prepare statement");
-                return false;
-            }
 
-            $stmt->execute($params);
-            error_log("Debug: Query executed successfully. Row count: " . $stmt->rowCount());
-            
+            // Bind parameters
+            if (!empty($search)) {
+                $searchParam = "%{$search}%";
+                $stmt->bindParam(':search', $searchParam);
+            }
+            if (!empty($category)) {
+                $stmt->bindParam(':category', $category);
+            }
+            $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+            $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+
+            $stmt->execute();
             return $stmt;
         } catch (PDOException $e) {
             error_log("Error in getAllInventory: " . $e->getMessage());
-            error_log("SQL State: " . $e->getCode());
             throw $e;
         }
     }
 
-    public function updateStock($product_id, $quantity_change, $type, $notes = '') {
+    public function getLowStockProducts($threshold = 10) {
+        try {
+            $query = "SELECT p.*, c.category_name 
+                     FROM " . $this->table_name . " p 
+                     LEFT JOIN category c ON p.category_id = c.category_id 
+                     WHERE p.stock_level <= :threshold 
+                     ORDER BY p.stock_level ASC";
+            
+            $stmt = $this->conn->prepare($query);
+            $stmt->bindParam(':threshold', $threshold, PDO::PARAM_INT);
+            $stmt->execute();
+            
+            return $stmt;
+        } catch (PDOException $e) {
+            error_log("Error in getLowStockProducts: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    public function updateStock($product_id, $quantity, $type, $notes) {
         try {
             $this->conn->beginTransaction();
 
             // Get current stock level
-            $query = "SELECT stock_level FROM " . $this->table_name . " WHERE product_id = ?";
+            $query = "SELECT stock_level FROM product WHERE product_id = :product_id";
             $stmt = $this->conn->prepare($query);
-            $stmt->execute([$product_id]);
+            $stmt->bindParam(':product_id', $product_id);
+            $stmt->execute();
             $current_stock = $stmt->fetch(PDO::FETCH_ASSOC)['stock_level'];
 
             // Calculate new stock level
-            $new_stock = $current_stock + $quantity_change;
+            $new_stock = $current_stock + $quantity;
+
+            // Prevent negative stock
             if ($new_stock < 0) {
-                throw new Exception("Stock level cannot be negative");
+                throw new Exception("Cannot reduce stock below 0");
             }
 
-            // Update stock level
-            $query = "UPDATE " . $this->table_name . " SET stock_level = ? WHERE product_id = ?";
+            // Update product stock
+            $query = "UPDATE product 
+                     SET stock_level = :new_stock 
+                     WHERE product_id = :product_id";
+            
             $stmt = $this->conn->prepare($query);
-            $stmt->execute([$new_stock, $product_id]);
-
-            // Record history
-            $query = "INSERT INTO " . $this->history_table . " 
-                     (product_id, change_type, quantity_change, previous_stock, new_stock, notes, change_date) 
-                     VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)";
-            $stmt = $this->conn->prepare($query);
-            $stmt->execute([$product_id, $type, $quantity_change, $current_stock, $new_stock, $notes]);
+            $stmt->bindParam(':new_stock', $new_stock);
+            $stmt->bindParam(':product_id', $product_id);
+            $stmt->execute();
 
             $this->conn->commit();
             return true;
+
         } catch (Exception $e) {
             $this->conn->rollBack();
             throw $e;
         }
     }
 
-    public function getStockHistory($product_id) {
-        $query = "SELECT h.*, p.name as product_name 
-                 FROM " . $this->history_table . " h
-                 LEFT JOIN " . $this->table_name . " p ON h.product_id = p.product_id
-                 WHERE h.product_id = ?
-                 ORDER BY h.change_date DESC";
-
-        $stmt = $this->conn->prepare($query);
-        $stmt->execute([$product_id]);
-        return $stmt;
-    }
-
-    public function getLowStockProducts($limit = 10) {
+    public function addProduct($data) {
         try {
-            $query = "SELECT p.*, c.category_name
-                     FROM product p
-                     LEFT JOIN category c ON p.category_id = c.category_id
-                     WHERE p.stock_level <= COALESCE(p.reorder_level, 10)
-                     ORDER BY (p.stock_level / NULLIF(p.reorder_level, 0)) ASC
-                     LIMIT ?";
-
-            error_log("Debug: Low stock query: " . $query);
+            $query = "INSERT INTO product (name, description, price, stock_level, category_id, supplier_id) 
+                     VALUES (:name, :description, :price, :stock_level, :category_id, :supplier_id)";
             
             $stmt = $this->conn->prepare($query);
-            $stmt->execute([$limit]);
             
-            error_log("Debug: Low stock products found: " . $stmt->rowCount());
+            $stmt->bindParam(':name', $data['name']);
+            $stmt->bindParam(':description', $data['description']);
+            $stmt->bindParam(':price', $data['price']);
+            $stmt->bindParam(':stock_level', $data['stock_level']);
+            $stmt->bindParam(':category_id', $data['category_id']);
+            $stmt->bindParam(':supplier_id', $data['supplier_id']);
             
-            return $stmt;
+            return $stmt->execute();
         } catch (PDOException $e) {
-            error_log("Error in getLowStockProducts: " . $e->getMessage());
+            error_log("Error in addProduct: " . $e->getMessage());
             throw $e;
         }
     }
