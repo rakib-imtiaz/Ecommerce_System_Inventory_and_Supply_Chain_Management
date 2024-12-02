@@ -22,16 +22,17 @@ INSERT INTO `category` (`category_name`) VALUES
 CREATE TABLE `customer` (
   `customer_id` INT AUTO_INCREMENT PRIMARY KEY,
   `name` VARCHAR(255) NOT NULL,
-  `shipping_address` TEXT NOT NULL
+  `shipping_address` TEXT NOT NULL,
+  `password` VARCHAR(255) NOT NULL DEFAULT ''
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Insert data into customer
-INSERT INTO `customer` (`name`, `shipping_address`) VALUES
-('Alice Johnson', '742 Evergreen Terrace'),
-('Bob Smith', '123 Elm Street'),
-('Charlie Brown', '456 Oak Avenue'),
-('Diana Prince', '789 Maple Drive'),
-('Ethan Hunt', '321 Pine Lane');
+INSERT INTO `customer` (`name`, `shipping_address`, `password`) VALUES
+('Alice Johnson', '742 Evergreen Terrace', 'alicepass123'),
+('Bob Smith', '123 Elm Street', 'bobpass456'),
+('Charlie Brown', '456 Oak Avenue', 'charliepass789'),
+('Diana Prince', '789 Maple Drive', 'dianapass321'),
+('Ethan Hunt', '321 Pine Lane', 'ethanpass654');
 
 -- ------------------------------
 -- Table: customeremail
@@ -402,4 +403,3 @@ CREATE TABLE `users` (
 INSERT INTO `users` (`username`, `password`, `role`) VALUES
 ('admin', 'admin123', 'admin'),
 ('demo', 'demo123', 'user');
-

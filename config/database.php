@@ -3,8 +3,8 @@ class Database
 {
     private $host = "localhost";
     private $db_name = "ecommerce_database";
-    private $username = "";
-    private $password = "";
+    private $username = "noman";
+    private $password = "noman";
     private $conn;
     private $debug = true; // Debug flag
 
